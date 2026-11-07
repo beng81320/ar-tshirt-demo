@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>AR T-shirt Test</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#111;color:white}#overlay{position:fixed;z-index:10;top:12px;left:12px;right:12px;pointer-events:none;text-align:center}#overlay span{background:#000b;padding:10px 14px;border-radius:10px;display:inline-block}#sound{position:fixed;z-index:20;bottom:24px;left:50%;transform:translateX(-50%);padding:14px 20px;border:0;border-radius:12px;background:white;color:black;font-weight:bold}#error{display:none;position:fixed;inset:0;z-index:50;background:#181818;padding:40px 24px;text-align:center}</style>
+</head><body>
+<div id="overlay"><span id="status">Allow camera access, then point at Picture 2 on your iPad</span></div>
+<button id="sound">Tap to enable video sound</button>
+<div id="error"><h2>Tracking file missing</h2><p>Upload <strong>targets.mind</strong> to the same GitHub folder as this page. Create it using the MindAR image-target compiler and the included target.jpg.</p></div>
+<a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" embedded color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+<a-assets><video id="clip" src="./video.mp4" preload="auto" playsinline webkit-playsinline muted loop crossorigin="anonymous"></video></a-assets>
+<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+<a-entity id="anchor" mindar-image-target="targetIndex: 0"><a-video src="#clip" position="0 0 0.01" width="1" height="0.5625"></a-video></a-entity>
+</a-scene>
+<script>
+const video=document.getElementById('clip'),anchor=document.getElementById('anchor'),status=document.getElementById('status'),sound=document.getElementById('sound');let audioEnabled=false;
+fetch('./targets.mind',{method:'HEAD'}).then(r=>{if(!r.ok)document.getElementById('error').style.display='block'}).catch(()=>document.getElementById('error').style.display='block');
+sound.addEventListener('click',async()=>{audioEnabled=true;video.muted=false;try{await video.play();video.pause();video.currentTime=0;sound.textContent='Sound enabled';}catch(e){sound.textContent='Tap to play when image found';}});
+anchor.addEventListener('targetFound',async()=>{status.textContent='Picture recognised — playing video';video.currentTime=0;video.muted=!audioEnabled;try{await video.play()}catch(e){status.textContent='Picture recognised — tap sound button to start';}});
+anchor.addEventListener('targetLost',()=>{video.pause();status.textContent='Point camera at Picture 2';});
+</script></body></html>
