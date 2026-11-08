@@ -1,21 +1,84 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>AR T-shirt Test</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AR T-shirt Test — iPhone</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-<style>body{margin:0;font-family:system-ui,sans-serif;background:#111;color:white}#overlay{position:fixed;z-index:10;top:12px;left:12px;right:12px;pointer-events:none;text-align:center}#overlay span{background:#000b;padding:10px 14px;border-radius:10px;display:inline-block}#sound{position:fixed;z-index:20;bottom:24px;left:50%;transform:translateX(-50%);padding:14px 20px;border:0;border-radius:12px;background:white;color:black;font-weight:bold}#error{display:none;position:fixed;inset:0;z-index:50;background:#181818;padding:40px 24px;text-align:center}</style>
-</head><body>
-<div id="overlay"><span id="status">Allow camera access, then point at Picture 2 on your iPad</span></div>
-<button id="sound">Tap to enable video sound</button>
-<div id="error"><h2>Tracking file missing</h2><p>Upload <strong>targets.mind</strong> to the same GitHub folder as this page. Create it using the MindAR image-target compiler and the included target.jpg.</p></div>
-<a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" embedded color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-<a-assets><video id="clip" src="./video.mp4" preload="auto" playsinline webkit-playsinline muted loop crossorigin="anonymous"></video></a-assets>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080808;color:white;font:16px system-ui,-apple-system,sans-serif}
+a-scene,#ar-scene{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;overflow:hidden!important}
+a-scene canvas{display:block!important;width:100%!important;height:100%!important}
+#hud{position:fixed;z-index:100;top:calc(env(safe-area-inset-top) + 12px);left:12px;right:12px;text-align:center;pointer-events:none}
+#status{display:inline-block;max-width:85%;border-radius:12px;background:#000c;padding:11px 14px;line-height:1.35}
+#actions{position:fixed;z-index:100;bottom:calc(env(safe-area-inset-bottom) + 24px);left:12px;right:12px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+button{border:0;border-radius:12px;background:#fff;color:#111;font-size:15px;padding:14px 18px;font-weight:700}
+#test{background:#303030;color:white;border:1px solid #666}
+#viewer{display:none;position:fixed;z-index:150;inset:0;background:#000;padding:40px 10px 30px;box-sizing:border-box}
+#preview{width:100%;height:100%;object-fit:contain}
+#close{position:absolute;right:18px;top:calc(env(safe-area-inset-top) + 12px)}
+</style>
+</head>
+<body>
+<div id="hud"><span id="status">Tap Start video, then point at Picture 2 on your iPad</span></div>
+<div id="actions"><button id="start" type="button">Start video</button><button id="test" type="button">Test video</button></div>
+<div id="viewer"><button id="close" type="button">Close</button><video id="preview" src="./video.mp4" playsinline controls preload="metadata"></video></div>
+<a-scene id="ar-scene" mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" embedded renderer="colorManagement: true; antialias: true" color-space="sRGB" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+<a-assets><video id="clip" src="./video.mp4" crossorigin="anonymous" preload="auto" muted playsinline webkit-playsinline loop></video></a-assets>
 <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-<a-entity id="anchor" mindar-image-target="targetIndex: 0"><a-video src="#clip" position="0 0 0.01" width="1" height="0.5625"></a-video></a-entity>
+<a-entity id="anchor" mindar-image-target="targetIndex: 0"><a-video src="#clip" position="0 0 0.015" width="1" height="0.5625" material="shader: flat; side: double"></a-video></a-entity>
 </a-scene>
 <script>
-const video=document.getElementById('clip'),anchor=document.getElementById('anchor'),status=document.getElementById('status'),sound=document.getElementById('sound');let audioEnabled=false;
-fetch('./targets.mind',{method:'HEAD'}).then(r=>{if(!r.ok)document.getElementById('error').style.display='block'}).catch(()=>document.getElementById('error').style.display='block');
-sound.addEventListener('click',async()=>{audioEnabled=true;video.muted=false;try{await video.play();video.pause();video.currentTime=0;sound.textContent='Sound enabled';}catch(e){sound.textContent='Tap to play when image found';}});
-anchor.addEventListener('targetFound',async()=>{status.textContent='Picture recognised — playing video';video.currentTime=0;video.muted=!audioEnabled;try{await video.play()}catch(e){status.textContent='Picture recognised — tap sound button to start';}});
-anchor.addEventListener('targetLost',()=>{video.pause();status.textContent='Point camera at Picture 2';});
-</script></body></html>
+const clip=document.querySelector('#clip');
+const anchor=document.querySelector('#anchor');
+const start=document.querySelector('#start');
+const status=document.querySelector('#status');
+const viewer=document.querySelector('#viewer');
+const preview=document.querySelector('#preview');
+let unlocked=false,tracking=false;
+const message=t=>{status.textContent=t};
+const prime=async()=>{
+  // iOS requires a direct tap before HTML video may become a WebGL texture.
+  clip.muted=true;
+  clip.setAttribute('playsinline','');
+  try{
+    await clip.play();
+    unlocked=true;
+    // Pause once the video has begun decoding, or continue if target is visible.
+    if(!tracking)clip.pause();
+    start.textContent='Video enabled';
+    message(tracking?'Picture recognised — video running':'Video enabled — point at Picture 2');
+    return true;
+  }catch(e){
+    message('Video start blocked. Tap Start video again.');
+    return false;
+  }
+};
+start.addEventListener('click',async()=>{
+  const ok=await prime();
+  if(ok&&tracking){try{clip.currentTime=0;await clip.play()}catch(e){message('Video failed to play — use Test video')}}
+});
+anchor.addEventListener('targetFound',async()=>{
+  tracking=true;
+  if(!unlocked){message('Picture recognised — now tap Start video');return;}
+  try{clip.currentTime=0;await clip.play();message('Picture recognised — playing video')}
+  catch(e){message('Playback blocked — tap Start video')}
+});
+anchor.addEventListener('targetLost',()=>{
+  tracking=false;
+  clip.pause();
+  message('Point camera at Picture 2');
+});
+document.querySelector('#test').addEventListener('click',async()=>{
+  clip.pause();viewer.style.display='block';
+  try{await preview.play()}catch(e){preview.controls=true}
+});
+document.querySelector('#close').addEventListener('click',()=>{
+  preview.pause();viewer.style.display='none';
+});
+clip.addEventListener('error',()=>message('Video file failed to load. Use Test video to check.'));
+fetch('./targets.mind',{method:'HEAD'}).then(r=>{if(!r.ok)message('Tracking file missing: targets.mind')}).catch(()=>message('Could not check tracking file.'));
+</script>
+</body>
+</html>
